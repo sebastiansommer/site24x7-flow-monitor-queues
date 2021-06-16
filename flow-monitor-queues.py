@@ -2,28 +2,46 @@
 import json
 import subprocess
 
-data = []
+PLUGIN_VERSION = "1"
+HEARTBEAT = "true"
 
-command = "FLOW_CONTEXT=Production /usr/bin/php /var/www/html/flow queue:list"
+FLOW_PATH = "FLOW_CONTEXT=Production /usr/bin/php /var/www/flow queue:list"
 
-process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-result = process.stdout.read()
+class FlowQueues(object):
+    def __init__(self, config):
+        self.configurations = config
+        self.connection = None
 
-if result.stdout: 
-    lines = result.stdout.splitlines();
-    del lines[0:3]
-    del lines[-1]
+    def collectData(self):
+        data = {
+            'plugin_version': PLUGIN_VERSION,
+            'heartbeat_required': HEARTBEAT,
+            'units': {}
+        }
 
-    for line in lines:
-        parts = line.decode().split('|');
+        process = subprocess.Popen(FLOW_PATH, shell=True, stdout=subprocess.PIPE)
+        result = process.stdout.read()
 
-        queueName = parts[1].strip()
-        jobsCount = int(parts[3])
+        lines = result.splitlines();
 
-        data.append({
-            'queue': queueName, 
-            'jobs' : jobsCount
-        });
+        del lines[0:3]
+        del lines[-1]
 
-print(json.dumps(data, indent=4, sort_keys=True))
+        for line in lines:
+            parts = line.decode().split('|');
 
+            queueName = parts[1].strip()
+            jobsCount = int(parts[3])
+
+            indexName = 'queue-' + queueName
+
+            data[indexName] = jobsCount
+
+            data['units'][indexName] = 'count'
+        return data
+
+if __name__ == "__main__":
+    configurations = {}
+    plugin = FlowQueues(configurations)
+    result = plugin.collectData()
+    print(json.dumps(result, indent=4, sort_keys=True))
